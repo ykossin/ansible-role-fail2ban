@@ -1,0 +1,122 @@
+---
+# Molecule конфигурация для роли fail2ban
+# Использует образы из проекта docker-systemd
+
+dependency:
+  name: galaxy
+  enabled: false  # Отключено для локального тестирования (роль используется локально)
+  options:
+    ignore-errors: true
+
+driver:
+  name: podman
+
+platforms:
+  - name: instance-debian-bookworm
+    image: docker.io/ykossin/docker-systemd:debian-bookworm
+    pre_build_image: true
+    privileged: true
+    cgroupns_mode: host
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    tmpfs:
+      - /tmp
+      - /run
+      - /run/lock
+    command: /lib/systemd/systemd
+    groups:
+      - debian_family
+      - debian_bookworm
+    environment:
+      container: podman
+      DEBIAN_FRONTEND: noninteractive
+
+  - name: instance-debian-bullseye
+    image: docker.io/ykossin/docker-systemd:debian-bullseye
+    pre_build_image: true
+    privileged: true
+    cgroupns_mode: host
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    tmpfs:
+      - /tmp
+      - /run
+      - /run/lock
+    command: /lib/systemd/systemd
+    groups:
+      - debian_family
+      - debian_bullseye
+    environment:
+      container: podman
+      DEBIAN_FRONTEND: noninteractive
+
+  - name: instance-ubuntu-22.04
+    image: docker.io/ykossin/docker-systemd:ubuntu-22.04
+    pre_build_image: true
+    privileged: true
+    cgroupns_mode: host
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    tmpfs:
+      - /tmp
+      - /run
+      - /run/lock
+    command: /lib/systemd/systemd
+    groups:
+      - debian_family
+      - ubuntu
+      - ubuntu_22.04
+    environment:
+      container: podman
+      DEBIAN_FRONTEND: noninteractive
+
+  - name: instance-ubuntu-24.04
+    image: docker.io/ykossin/docker-systemd:ubuntu-24.04
+    pre_build_image: true
+    privileged: true
+    cgroupns_mode: host
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    tmpfs:
+      - /tmp
+      - /run
+      - /run/lock
+    command: /lib/systemd/systemd
+    groups:
+      - debian_family
+      - ubuntu
+      - ubuntu_24.04
+    environment:
+      container: podman
+      DEBIAN_FRONTEND: noninteractive
+
+provisioner:
+  name: ansible
+  config_options:
+    defaults:
+      timeout: 30
+      host_key_checking: false
+      interpreter_python: auto_silent
+      roles_path: ../../..
+      allow_broken_conditionals: true
+  inventory:
+    host_vars:
+      instance-debian-bookworm:
+        ansible_python_interpreter: /usr/bin/python3
+      instance-debian-bullseye:
+        ansible_python_interpreter: /usr/bin/python3
+      instance-ubuntu-22.04:
+        ansible_python_interpreter: /usr/bin/python3
+      instance-ubuntu-24.04:
+        ansible_python_interpreter: /usr/bin/python3
+  playbooks:
+    converge: ${MOLECULE_PLAYBOOK:-converge.yml}
+    prepare: prepare.yml
+
+lint: |
+  set -e
+  yamllint .
+  ansible-lint --skip-list role-name
+
+verifier:
+  name: ansible

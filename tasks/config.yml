@@ -1,0 +1,63 @@
+---
+# Настройка конфигурации fail2ban
+
+- name: Остановка fail2ban перед настройкой
+  systemd:
+    name: fail2ban
+    state: stopped
+  when:
+    - fail2ban_enabled
+    - ansible_check_mode | default(false) == false
+  failed_when: false
+  tags:
+    - fail2ban
+    - service
+    - config
+
+- name: Создание конфигурации jail.local
+  template:
+    src: jail.local.j2
+    dest: /etc/fail2ban/jail.local
+    owner: root
+    group: root
+    mode: '0644'
+    backup: false
+  notify: restart fail2ban
+  when: fail2ban_enabled
+  tags:
+    - fail2ban
+    - config
+
+- name: Создание пользовательских фильтров
+  template:
+    src: filter.conf.j2
+    dest: "/etc/fail2ban/filter.d/{{ item.name }}.conf"
+    owner: root
+    group: root
+    mode: '0644'
+    backup: false
+  loop: "{{ fail2ban_filters }}"
+  notify: restart fail2ban
+  when:
+    - fail2ban_enabled
+    - fail2ban_filters | length > 0
+  tags:
+    - fail2ban
+    - filters
+
+- name: Создание пользовательских действий
+  template:
+    src: action.conf.j2
+    dest: "/etc/fail2ban/action.d/{{ item.name }}.conf"
+    owner: root
+    group: root
+    mode: '0644'
+    backup: false
+  loop: "{{ fail2ban_actions }}"
+  notify: restart fail2ban
+  when:
+    - fail2ban_enabled
+    - fail2ban_actions | length > 0
+  tags:
+    - fail2ban
+    - actions

@@ -1,0 +1,79 @@
+---
+# Применение роли fail2ban для тестирования
+
+- name: Converge
+  hosts: all
+  gather_facts: true
+  become: true
+  vars:
+    # Настройки для тестирования
+    fail2ban_enabled: true
+    fail2ban_state: started
+    fail2ban_enabled_on_boot: true
+
+    # Настройки конфигурации
+    fail2ban_config:
+      bantime: 3600
+      findtime: 600
+      maxretry: 5
+      loglevel: "INFO"
+      banaction: "iptables"  # Используем iptables для тестов (ufw может быть не установлен)
+      backend: "auto"
+
+    # Включенные jail для тестирования
+    fail2ban_jails:
+      - name: "sshd"
+        enabled: true
+        port: "ssh"
+        filter: "sshd"
+        logpath: "/var/log/auth.log"
+        maxretry: 5
+        bantime: 3600
+        findtime: 600
+
+    # Белый список для тестирования
+    fail2ban_whitelist_ips:
+      - "127.0.0.1/8"
+      - "::1"
+
+    # Отключить логирование действий для тестов
+    fail2ban_log_actions: false
+    fail2ban_collect_metrics: false
+
+  roles:
+    - role: ../../..
+      tags:
+        - fail2ban
+
+  post_tasks:
+    - name: Проверка установки fail2ban
+      ansible.builtin.command:
+        cmd: fail2ban-client --version
+      register: fail2ban_version
+      changed_when: false
+      tags:
+        - verify
+        - verify:installation
+
+    - name: Отображение версии fail2ban
+      debug:
+        msg: "fail2ban версия: {{ fail2ban_version.stdout_lines[0] }}"
+      tags:
+        - verify
+        - verify:installation
+
+    - name: Проверка статуса fail2ban
+      ansible.builtin.command:
+        cmd: fail2ban-client status
+      register: fail2ban_status_check
+      changed_when: false
+      tags:
+        - verify
+        - verify:status
+
+    - name: Отображение статуса fail2ban
+      debug:
+        msg: "{{ fail2ban_status_check.stdout_lines }}"
+      tags:
+        - verify
+        - verify:status

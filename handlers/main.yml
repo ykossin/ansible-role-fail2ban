@@ -6,3 +6,4 @@
     name: fail2ban
     state: restarted
     enabled: "{{ fail2ban_enabled_on_boot }}"
+  failed_when: false

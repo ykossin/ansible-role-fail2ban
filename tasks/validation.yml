@@ -1,0 +1,65 @@
+---
+# Валидация переменных fail2ban
+
+- name: Валидация переменных fail2ban
+  assert:
+    that:
+      - fail2ban_state in ['started', 'stopped', 'restarted', 'reloaded']
+      - fail2ban_config.bantime | int > 0
+      - fail2ban_config.findtime | int > 0
+      - fail2ban_config.maxretry | int > 0
+      - fail2ban_config.loglevel in ['CRITICAL', 'ERROR', 'WARNING', 'NOTICE', 'INFO', 'DEBUG']
+      - fail2ban_config.banaction in ['ufw', 'iptables', 'iptables-multiport', 'iptables-allports', 'firewallcmd-ipset', 'firewallcmd-rich-rules']
+      - fail2ban_config.backend | default('auto') in ['auto', 'systemd', 'pyinotify']
+      - fail2ban_jails is defined
+      - fail2ban_jails is iterable
+      - fail2ban_whitelist_ips is defined
+      - fail2ban_whitelist_ips is iterable
+      - fail2ban_ignore_ips is defined
+      - fail2ban_ignore_ips is iterable
+      - fail2ban_filters is defined
+      - fail2ban_filters is iterable
+      - fail2ban_actions is defined
+      - fail2ban_actions is iterable
+    fail_msg: |
+      Некорректное значение переменной fail2ban:
+      - fail2ban_state: {{ fail2ban_state | default('не задано') }} (должно быть: started, stopped, restarted, reloaded)
+      - fail2ban_config.bantime: {{ fail2ban_config.bantime | default('не задано') }} (должно быть > 0)
+      - fail2ban_config.findtime: {{ fail2ban_config.findtime | default('не задано') }} (должно быть > 0)
+      - fail2ban_config.maxretry: {{ fail2ban_config.maxretry | default('не задано') }} (должно быть > 0)
+      - fail2ban_config.loglevel: {{ fail2ban_config.loglevel | default('не задано') }} (должно быть: CRITICAL, ERROR, WARNING, NOTICE, INFO, DEBUG)
+      - fail2ban_config.banaction: {{ fail2ban_config.banaction | default('не задано') }} (должно быть: ufw, iptables, iptables-multiport, iptables-allports, firewallcmd-ipset, firewallcmd-rich-rules)
+      - fail2ban_config.backend: {{ fail2ban_config.backend | default('не задано') }} (должно быть: auto, systemd, pyinotify)
+    success_msg: "Все переменные fail2ban валидны"
+  when: fail2ban_enabled
+  tags:
+    - fail2ban
+    - validation
+
+- name: Валидация jail конфигураций
+  assert:
+    that:
+      - item.name is defined
+      - item.name | length > 0
+      - item.logpath is defined
+      - item.logpath | length > 0
+      - item.enabled | default(true) | type_debug == "bool"
+      - item.maxretry | default(fail2ban_config.maxretry) | int > 0
+      - item.bantime | default(fail2ban_config.bantime) | int > 0
+      - item.findtime | default(fail2ban_config.findtime) | int > 0
+    fail_msg: |
+      Некорректная конфигурация jail "{{ item.name | default('неизвестно') }}":
+      - name: {{ item.name | default('не задано') }}
+      - logpath: {{ item.logpath | default('не задано') }}
+      - enabled: {{ item.enabled | default('не задано') }}
+      - maxretry: {{ item.maxretry | default('не задано') }}
+      - bantime: {{ item.bantime | default('не задано') }}
+      - findtime: {{ item.findtime | default('не задано') }}
+    success_msg: "Jail '{{ item.name }}' валиден"
+  loop: "{{ fail2ban_jails }}"
+  when:
+    - fail2ban_enabled
+    - fail2ban_jails | length > 0
+  tags:
+    - fail2ban
+    - validation

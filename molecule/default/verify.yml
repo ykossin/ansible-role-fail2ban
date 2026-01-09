@@ -1,0 +1,182 @@
+---
+# Тесты для проверки работы роли fail2ban
+
+- name: Verify
+  hosts: all
+  gather_facts: true
+  become: true
+  tasks:
+    - name: Проверка версии дистрибутива
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.distribution in ['Debian', 'Ubuntu']
+          - ansible_facts.distribution_version is defined
+        fail_msg: >-
+          Неподдерживаемый дистрибутив: {{ ansible_facts.distribution }}
+        success_msg: >-
+          Дистрибутив поддерживается: {{ ansible_facts.distribution }}
+          {{ ansible_facts.distribution_version }}
+      tags:
+        - verify
+        - verify:distribution
+
+    - name: Проверка установки fail2ban
+      ansible.builtin.command:
+        cmd: fail2ban-client --version
+      register: fail2ban_version
+      changed_when: false
+      tags:
+        - verify
+        - verify:installation
+
+    - name: Проверка наличия fail2ban
+      ansible.builtin.assert:
+        that:
+          - fail2ban_version.rc == 0
+          - fail2ban_version.stdout is defined
+        fail_msg: "fail2ban не установлен или недоступен"
+        success_msg: "fail2ban установлен: {{ fail2ban_version.stdout_lines[0] }}"
+      tags:
+        - verify
+        - verify:installation
+
+    - name: Проверка статуса fail2ban
+      ansible.builtin.command:
+        cmd: fail2ban-client status
+      register: fail2ban_status
+      changed_when: false
+      tags:
+        - verify
+        - verify:status
+
+    - name: Проверка работы fail2ban
+      ansible.builtin.assert:
+        that:
+          - fail2ban_status.rc == 0
+          - fail2ban_status.stdout is defined
+          - "Server ready" in fail2ban_status.stdout or "Status" in fail2ban_status.stdout
+        fail_msg: "fail2ban не работает корректно"
+        success_msg: "fail2ban работает корректно"
+      tags:
+        - verify
+        - verify:status
+
+    - name: Проверка наличия конфигурационного файла
+      ansible.builtin.stat:
+        path: /etc/fail2ban/jail.local
+      register: jail_local_file
+      tags:
+        - verify
+        - verify:config
+
+    - name: Проверка существования jail.local
+      ansible.builtin.assert:
+        that:
+          - jail_local_file.stat.exists
+          - jail_local_file.stat.isreg
+        fail_msg: "Конфигурационный файл /etc/fail2ban/jail.local не существует"
+        success_msg: "Конфигурационный файл /etc/fail2ban/jail.local существует"
+      tags:
+        - verify
+        - verify:config
+
+    - name: Проверка прав доступа к jail.local
+      ansible.builtin.assert:
+        that:
+          - jail_local_file.stat.mode is defined
+          - (jail_local_file.stat.mode | int) & 0o644 == 0o644 or (jail_local_file.stat.mode | int) & 0o600 == 0o600
+        fail_msg: "Некорректные права доступа к jail.local: {{ jail_local_file.stat.mode }}"
+        success_msg: "Права доступа к jail.local корректны: {{ jail_local_file.stat.mode }}"
+      tags:
+        - verify
+        - verify:config
+
+    - name: Проверка статуса сервиса fail2ban
+      ansible.builtin.systemd:
+        name: fail2ban
+      register: fail2ban_service
+      tags:
+        - verify
+        - verify:service
+
+    - name: Проверка работы сервиса fail2ban
+      ansible.builtin.assert:
+        that:
+          - fail2ban_service.status.ActiveState == "active"
+          - fail2ban_service.status.UnitFileState == "enabled"
+        fail_msg: "Сервис fail2ban не активен или не включен"
+        success_msg: "Сервис fail2ban активен и включен"
+      tags:
+        - verify
+        - verify:service
+
+    - name: Проверка статуса jail sshd
+      ansible.builtin.command:
+        cmd: fail2ban-client status sshd
+      register: sshd_jail_status
+      changed_when: false
+      failed_when: false
+      tags:
+        - verify
+        - verify:jail
+
+    - name: Проверка работы jail sshd
+      ansible.builtin.assert:
+        that:
+          - sshd_jail_status.rc == 0
+          - sshd_jail_status.stdout is defined
+        fail_msg: "Jail sshd не работает"
+        success_msg: "Jail sshd работает корректно"
+      tags:
+        - verify
+        - verify:jail
+
+    - name: Проверка синтаксиса конфигурации
+      ansible.builtin.command:
+        cmd: fail2ban-client -t
+      register: fail2ban_test
+      changed_when: false
+      tags:
+        - verify
+        - verify:syntax
+
+    - name: Проверка корректности синтаксиса
+      ansible.builtin.assert:
+        that:
+          - fail2ban_test.rc == 0
+        fail_msg: "Ошибка синтаксиса в конфигурации fail2ban: {{ fail2ban_test.stderr }}"
+        success_msg: "Синтаксис конфигурации fail2ban корректен"
+      tags:
+        - verify
+        - verify:syntax
+
+    - name: Проверка наличия бэкапов
+      ansible.builtin.stat:
+        path: /etc/fail2ban/backups
+      register: backups_dir
+      tags:
+        - verify
+        - verify:backup
+
+    - name: Проверка создания директории бэкапов
+      ansible.builtin.assert:
+        that:
+          - backups_dir.stat.exists
+          - backups_dir.stat.isdir
+        fail_msg: "Директория для бэкапов не создана"
+        success_msg: "Директория для бэкапов создана"
+      tags:
+        - verify
+        - verify:backup
+
+    - name: Итоговая информация
+      ansible.builtin.debug:
+        msg:
+          - "=== Результаты проверки fail2ban ==="
+          - "Дистрибутив: {{ ansible_distribution }} {{ ansible_distribution_version }}"
+          - "fail2ban версия: {{ fail2ban_version.stdout_lines[0] }}"
+          - "Сервис: {{ fail2ban_service.status.ActiveState }}"
+          - "Конфигурация: {{ 'OK' if jail_local_file.stat.exists else 'FAIL' }}"
+          - "Синтаксис: {{ 'OK' if fail2ban_test.rc == 0 else 'FAIL' }}"
+      tags:
+        - verify

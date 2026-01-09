@@ -1,0 +1,75 @@
+---
+# Настройка мониторинга fail2ban
+
+- name: Установка скриптов мониторинга
+  copy:
+    src: "{{ item }}"
+    dest: "/usr/local/bin/{{ item | basename }}"
+    owner: root
+    group: root
+    mode: '0755'
+  loop:
+    - fail2ban-status.sh
+    - fail2ban-report.sh
+    - fail2ban-prometheus.sh
+    - fail2ban-monitor.sh
+  when: fail2ban_enabled
+  tags:
+    - fail2ban
+    - monitoring
+
+- name: Создание директории для Prometheus метрик
+  file:
+    path: "{{ fail2ban_prometheus_metrics_dir | default('/var/lib/prometheus/node-exporter') }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  when:
+    - fail2ban_enabled
+    - fail2ban_prometheus_enabled | default(false)
+  tags:
+    - fail2ban
+    - monitoring
+    - prometheus
+
+- name: Настройка cron для Prometheus метрик
+  cron:
+    name: "Update fail2ban Prometheus metrics"
+    minute: "*/1"
+    job: "/usr/local/bin/fail2ban-prometheus.sh {{ fail2ban_prometheus_metrics_dir | default('/var/lib/prometheus/node-exporter') }}/fail2ban.prom"
+    user: root
+  when:
+    - fail2ban_enabled
+    - fail2ban_prometheus_enabled | default(false)
+  tags:
+    - fail2ban
+    - monitoring
+    - prometheus
+
+- name: Настройка cron для ежедневных отчетов
+  cron:
+    name: "Daily fail2ban report"
+    minute: "0"
+    hour: "8"
+    job: "/usr/local/bin/fail2ban-report.sh {{ fail2ban_report_email | default('') }}"
+    user: root
+  when:
+    - fail2ban_enabled
+    - fail2ban_report_enabled | default(false)
+  tags:
+    - fail2ban
+    - monitoring
+    - reports
+
+- name: Первый запуск Prometheus экспорта метрик
+  command: /usr/local/bin/fail2ban-prometheus.sh {{ fail2ban_prometheus_metrics_dir | default('/var/lib/prometheus/node-exporter') }}/fail2ban.prom
+  when:
+    - fail2ban_enabled
+    - fail2ban_prometheus_enabled | default(false)
+    - fail2ban_state == "started"
+  changed_when: false
+  tags:
+    - fail2ban
+    - monitoring
+    - prometheus

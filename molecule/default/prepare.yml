@@ -1,0 +1,63 @@
+---
+# Подготовка окружения перед применением роли fail2ban
+# Убеждаемся, что systemd работает и система готова к настройке fail2ban
+
+- name: Prepare
+  hosts: all
+  gather_facts: true
+  tasks:
+    - name: Ожидание запуска systemd
+      wait_for:
+        path: /run/systemd/system
+        timeout: 30
+      register: systemd_ready
+
+    - name: Проверка статуса systemd
+      ansible.builtin.command:
+        cmd: systemctl is-system-running
+      register: systemd_status
+      changed_when: false
+      failed_when: false
+
+    - name: Отображение статуса systemd
+      debug:
+        msg: "Systemd статус: {{ systemd_status.stdout }}"
+
+    - name: Обновление списка пакетов (предварительное)
+      apt:
+        update_cache: true
+        cache_valid_time: 3600
+      when: ansible_facts['os_family'] == "Debian"
+      failed_when: false
+      register: apt_update_result
+      ignore_errors: true
+
+    - name: Проверка версии дистрибутива
+      debug:
+        msg:
+          - "Дистрибутив: {{ ansible_distribution }}"
+          - "Версия: {{ ansible_distribution_version }}"
+          - "Кодовое имя: {{ ansible_distribution_release }}"
+
+    - name: Проверка наличия fail2ban (до применения роли)
+      ansible.builtin.command:
+        cmd: which fail2ban-client || echo "fail2ban_not_installed"
+      register: fail2ban_check_before
+      changed_when: false
+      failed_when: false
+
+    - name: Отображение статуса fail2ban до применения роли
+      debug:
+        msg: >-
+          fail2ban статус до применения роли:
+          {{ 'установлен' if 'fail2ban_not_installed' not in
+          fail2ban_check_before.stdout else 'не установлен' }}
+
+    - name: Создание тестового лог-файла для SSH
+      file:
+        path: /var/log/auth.log
+        state: touch
+        owner: root
+        group: adm
+        mode: '0640'
+      failed_when: false

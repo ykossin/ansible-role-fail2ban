@@ -4,10 +4,15 @@
 
 [DEFAULT]
 
+# Backend для мониторинга файлов
+backend = {{ fail2ban_config.backend | default('auto') }}
+
 # Логи
-loglevel = {{ fail2ban_config.loglevel }}
-logtarget = {{ fail2ban_config.logtarget }}
+loglevel = {{ fail2ban_config.loglevel | default('INFO') }}
+logtarget = {{ fail2ban_config.logtarget | default('/var/log/fail2ban.log') }}
+{% if fail2ban_config.syslogsocket is defined %}
 syslogsocket = {{ fail2ban_config.syslogsocket }}
+{% endif %}
 
 # Настройки бана
 bantime = {{ fail2ban_config.bantime }}
@@ -16,26 +21,49 @@ maxretry = {{ fail2ban_config.maxretry }}
 
 # Действие по умолчанию
 banaction = {{ fail2ban_config.banaction }}
+{% if fail2ban_config.action is defined %}
 action = {{ fail2ban_config.action }}
+{% endif %}
 
-{% if fail2ban_config.destemail | length > 0 %}
+{% if fail2ban_config.chain is defined %}
+# Цепочка iptables (если используется)
+chain = {{ fail2ban_config.chain }}
+{% endif %}
+
+{% if fail2ban_config.rate_limit is defined and fail2ban_config.rate_limit_interval is defined %}
+# Rate limiting
+ratelimit = {{ fail2ban_config.rate_limit }}/{{ fail2ban_config.rate_limit_interval }}
+{% endif %}
+
+{% if fail2ban_config.ipv6_enabled | default(true) == false %}
+# Отключение IPv6
+ipv6 = false
+{% endif %}
+
+{% if fail2ban_config.destemail is defined and fail2ban_config.destemail | length > 0 %}
 # Email уведомления
 destemail = {{ fail2ban_config.destemail }}
+{% if fail2ban_config.sendername is defined %}
 sendername = {{ fail2ban_config.sendername }}
+{% endif %}
+{% if fail2ban_config.sender is defined %}
 sender = {{ fail2ban_config.sender }}
+{% endif %}
+{% if fail2ban_config.mta is defined %}
 mta = {{ fail2ban_config.mta }}
+{% endif %}
 {% endif %}
 
 # Игнорировать IP адреса
 ignoreip = {{ (fail2ban_whitelist_ips + fail2ban_ignore_ips) | join(' ') }}
 
-{% if fail2ban_config.destemail | length > 0 and fail2ban_send_email %}
+{% if fail2ban_config.destemail is defined and fail2ban_config.destemail | length > 0 and fail2ban_send_email %}
 # Действие с email
 action_mw = %(banaction)s[name=%(__name__)s, bantime="%(bantime)s", port="%(port)s", protocol="%(protocol)s"]
-               %(mta)s-whois[name=%(__name__)s, sender="%(sender)s", dest="%(destemail)s", protocol="%(protocol)s", chain="%(chain)s"]
+               %(mta)s-whois[name=%(__name__)s, sender="%(sender)s", dest="%(destemail)s", protocol="%(protocol)s"{% if fail2ban_config.chain is defined %}, chain="%(chain)s"{% endif %}]
 {% if fail2ban_email_only_errors %}
 action_mwl = %(banaction)s[name=%(__name__)s, bantime="%(bantime)s", port="%(port)s", protocol="%(protocol)s"]
-                %(mta)s-whois-lines[name=%(__name__)s, sender="%(sender)s", dest="%(destemail)s", logpath="%(logpath)s", chain="%(chain)s"]
+                %(mta)s-whois-lines[name=%(__name__)s, sender="%(sender)s", dest="%(destemail)s", logpath="%(logpath)s"{% if fail2ban_config.chain is defined %}, chain="%(chain)s"{% endif %}]
 {% endif %}
 {% endif %}
 

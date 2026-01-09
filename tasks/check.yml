@@ -1,0 +1,97 @@
+---
+# Проверка статуса и синтаксиса fail2ban
+
+- name: Проверка синтаксиса конфигурации fail2ban
+  command: fail2ban-client -t
+  register: fail2ban_test
+  changed_when: false
+  when:
+    - fail2ban_enabled
+    - fail2ban_state == "started"
+  failed_when: false
+  tags:
+    - fail2ban
+    - check
+    - validation
+
+- name: Обработка ошибок синтаксиса конфигурации
+  fail:
+    msg: |
+      Ошибка в конфигурации fail2ban:
+      {{ fail2ban_test.stderr | default(fail2ban_test.stdout | default('Неизвестная ошибка')) }}
+      
+      Проверьте:
+      - Синтаксис файла /etc/fail2ban/jail.local
+      - Существование указанных фильтров
+      - Корректность путей к логам
+  when:
+    - fail2ban_enabled
+    - fail2ban_state == "started"
+    - fail2ban_test.rc != 0
+  tags:
+    - fail2ban
+    - check
+    - validation
+
+- name: Проверка статуса fail2ban
+  command: fail2ban-client status
+  register: fail2ban_status
+  changed_when: false
+  when: fail2ban_enabled
+  failed_when: false
+  tags:
+    - fail2ban
+    - check
+
+- name: Отображение статуса fail2ban
+  debug:
+    msg: "{{ fail2ban_status.stdout_lines }}"
+  when:
+    - fail2ban_enabled
+    - fail2ban_status.stdout_lines is defined
+    - fail2ban_status.rc == 0
+  tags:
+    - fail2ban
+    - check
+
+- name: Проверка активных jail
+  command: fail2ban-client status {{ item.name }}
+  register: jail_status
+  loop: "{{ fail2ban_jails }}"
+  when:
+    - fail2ban_enabled
+    - item.enabled | default(true)
+    - fail2ban_state == "started"
+  changed_when: false
+  failed_when: false
+  tags:
+    - fail2ban
+    - check
+
+- name: Отображение информации о jail
+  debug:
+    msg:
+      - "Jail: {{ item.item.name }}"
+      - "{{ item.stdout_lines }}"
+  loop: "{{ jail_status.results | default([]) }}"
+  when:
+    - fail2ban_enabled
+    - jail_status is defined
+    - item.rc == 0
+  tags:
+    - fail2ban
+    - check
+
+- name: Информация о fail2ban
+  debug:
+    msg:
+      - "fail2ban настроен и {{ fail2ban_state }}!"
+      - "Активных jail: {{ fail2ban_jails | selectattr('enabled', 'equalto', true) | list | length }}"
+      - "Время бана: {{ fail2ban_config.bantime }} секунд"
+      - "Максимум попыток: {{ fail2ban_config.maxretry }}"
+      - "Окно времени: {{ fail2ban_config.findtime }} секунд"
+      - "Проверка: fail2ban-client status"
+  when: fail2ban_enabled
+  tags:
+    - fail2ban
+    - check

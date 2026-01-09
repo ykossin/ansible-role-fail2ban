@@ -1,0 +1,86 @@
+---
+# Установка fail2ban и проверка зависимостей
+
+- name: Установка fail2ban
+  apt:
+    name: fail2ban
+    state: present
+    update_cache: true
+  when: fail2ban_enabled
+  register: fail2ban_install_result
+  failed_when: false
+  tags:
+    - fail2ban
+    - packages
+
+- name: Обработка ошибок при установке fail2ban
+  fail:
+    msg: |
+      Ошибка при установке fail2ban:
+      {{ fail2ban_install_result.stderr | default(fail2ban_install_result.msg | default('Неизвестная ошибка')) }}
+      
+      Проверьте:
+      - Доступность репозиториев (apt update)
+      - Права доступа (требуется root/sudo)
+      - Свободное место на диске
+      - Сетевое подключение
+  when:
+    - fail2ban_enabled
+    - fail2ban_install_result.failed | default(false)
+    - fail2ban_install_result.rc | default(0) != 0
+  tags:
+    - fail2ban
+    - packages
+
+- name: Проверка наличия ufw (если используется banaction ufw)
+  command: which ufw
+  register: ufw_check
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when:
+    - fail2ban_enabled
+    - fail2ban_config.banaction == "ufw"
+  tags:
+    - fail2ban
+    - dependencies
+
+- name: Предупреждение об отсутствии ufw
+  debug:
+    msg: |
+      ВНИМАНИЕ: ufw не установлен, но используется banaction=ufw
+      fail2ban может не работать корректно.
+      Установите ufw или измените fail2ban_config.banaction на другой вариант.
+  when:
+    - fail2ban_enabled
+    - fail2ban_config.banaction == "ufw"
+    - ufw_check.rc != 0
+  tags:
+    - fail2ban
+    - dependencies
+
+- name: Проверка наличия iptables (если используется banaction iptables)
+  command: which iptables
+  register: iptables_check
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when:
+    - fail2ban_enabled
+    - fail2ban_config.banaction | regex_search('iptables')
+  tags:
+    - fail2ban
+    - dependencies
+
+- name: Предупреждение об отсутствии iptables
+  debug:
+    msg: |
+      ВНИМАНИЕ: iptables не установлен, но используется banaction с iptables
+      fail2ban может не работать корректно.
+  when:
+    - fail2ban_enabled
+    - fail2ban_config.banaction | regex_search('iptables')
+    - iptables_check.rc != 0
+  tags:
+    - fail2ban
+    - dependencies

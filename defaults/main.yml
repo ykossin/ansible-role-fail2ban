@@ -18,14 +18,27 @@ fail2ban_config:
   loglevel: "INFO"
   syslogsocket: "auto"
   
+  # Backend для мониторинга файлов
+  # auto - автоматический выбор (рекомендуется)
+  # systemd - для systemd-based систем
+  # pyinotify - для старых систем без systemd
+  backend: "auto"
+  
   # Настройки бана
   bantime: 3600  # Время бана в секундах (1 час)
   findtime: 600  # Окно времени для поиска неудачных попыток (10 минут)
   maxretry: 5    # Количество неудачных попыток до бана
   
   # Настройки действия
-  banaction: "ufw"
+  banaction: "ufw"  # ufw, iptables, iptables-multiport, iptables-allports
   action: "action_"
+  
+  # Настройки для iptables (если используется)
+  chain: "INPUT"  # Цепочка iptables
+  
+  # Rate limiting (опционально)
+  rate_limit: 10  # Максимум действий в секунду
+  rate_limit_interval: 1  # Интервал в секундах
   
   # Email уведомления (опционально)
   destemail: ""
@@ -36,6 +49,9 @@ fail2ban_config:
   # Настройки SSH
   ssh_port: "22"
   ssh_protocol: "tcp"
+  
+  # Поддержка IPv6
+  ipv6_enabled: true
 
 # Включенные jail (сервисы для защиты)
 fail2ban_jails:
@@ -47,18 +63,63 @@ fail2ban_jails:
     maxretry: 5
     bantime: 3600
     findtime: 600
-  # Примеры для других сервисов:
+  
+  # Дополнительные jail (отключены по умолчанию)
+  # Раскомментируйте и настройте при необходимости
+  
   # - name: "nginx-http-auth"
-  #   enabled: true
+  #   enabled: false
   #   port: "http,https"
   #   filter: "nginx-http-auth"
   #   logpath: "/var/log/nginx/error.log"
   #   maxretry: 3
+  #   bantime: 3600
+  #   findtime: 600
+  
+  # - name: "nginx-limit-req"
+  #   enabled: false
+  #   port: "http,https"
+  #   filter: "nginx-limit-req"
+  #   logpath: "/var/log/nginx/error.log"
+  #   maxretry: 10
+  #   bantime: 3600
+  #   findtime: 600
+  
   # - name: "apache-auth"
-  #   enabled: true
+  #   enabled: false
   #   port: "http,https"
   #   filter: "apache-auth"
   #   logpath: "/var/log/apache2/*error.log"
+  #   maxretry: 3
+  #   bantime: 3600
+  #   findtime: 600
+  
+  # - name: "postfix"
+  #   enabled: false
+  #   port: "smtp,465,submission"
+  #   filter: "postfix"
+  #   logpath: "/var/log/mail.log"
+  #   maxretry: 3
+  #   bantime: 3600
+  #   findtime: 600
+  
+  # - name: "dovecot"
+  #   enabled: false
+  #   port: "pop3,pop3s,imap,imaps,submission,465,sieve"
+  #   filter: "dovecot"
+  #   logpath: "/var/log/mail.log"
+  #   maxretry: 5
+  #   bantime: 3600
+  #   findtime: 600
+  
+  # - name: "recidive"
+  #   enabled: false
+  #   port: "all"
+  #   filter: "recidive"
+  #   logpath: "/var/log/fail2ban.log"
+  #   maxretry: 5
+  #   bantime: 604800  # 1 неделя
+  #   findtime: 86400  # 1 день
 
 # Белый список IP адресов (никогда не банить)
 fail2ban_whitelist_ips: []
@@ -100,3 +161,22 @@ fail2ban_send_email: false
 
 # Отправить email только при ошибках
 fail2ban_email_only_errors: false
+
+# Создавать директории для логов автоматически (если не существуют)
+fail2ban_create_log_dirs: false
+
+# Логировать действия роли в отдельный файл
+fail2ban_log_actions: false
+fail2ban_actions_log_path: "/var/log/ansible-fail2ban.log"
+
+# Собирать метрики и статистику
+fail2ban_collect_metrics: false
+
+# Мониторинг
+# Включить экспорт метрик в Prometheus (через node_exporter textfile collector)
+fail2ban_prometheus_enabled: false
+fail2ban_prometheus_metrics_dir: "/var/lib/prometheus/node-exporter"
+
+# Включить ежедневные отчеты
+fail2ban_report_enabled: false
+fail2ban_report_email: ""  # Email для отправки отчетов (если пусто, только в stdout)

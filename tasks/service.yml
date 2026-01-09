@@ -1,0 +1,27 @@
+---
+# Управление состоянием сервиса fail2ban
+
+- name: Управление состоянием fail2ban
+  systemd:
+    name: fail2ban
+    state: "{{ fail2ban_state }}"
+    enabled: "{{ fail2ban_enabled_on_boot }}"
+    daemon_reload: true
+  when: fail2ban_enabled
+  register: fail2ban_service
+  failed_when: false
+  tags:
+    - fail2ban
+    - service
+
+- name: Ожидание запуска fail2ban
+  wait_for:
+    path: /var/run/fail2ban/fail2ban.sock
+    delay: 2
+    timeout: 10
+  when:
+    - fail2ban_enabled
+    - fail2ban_state == "started"
+  tags:
+    - fail2ban
+    - service

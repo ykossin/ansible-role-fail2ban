@@ -1,0 +1,109 @@
+---
+# Проверка существования и корректности лог-файлов
+
+- name: Проверка существования лог-файлов для jail
+  stat:
+    path: "{{ item.logpath | regex_replace('\\*.*$', '') | dirname | default(item.logpath) }}"
+  register: log_path_stat
+  loop: "{{ fail2ban_jails }}"
+  when:
+    - fail2ban_enabled
+    - item.enabled | default(true)
+    - item.logpath is defined
+  tags:
+    - fail2ban
+    - logs-check
+
+- name: Проверка существования конкретных лог-файлов
+  stat:
+    path: "{{ item.logpath }}"
+  register: log_file_stat
+  loop: "{{ fail2ban_jails }}"
+  when:
+    - fail2ban_enabled
+    - item.enabled | default(true)
+    - item.logpath is defined
+    - "'*' not in item.logpath"
+  tags:
+    - fail2ban
+    - logs-check
+
+- name: Предупреждение о несуществующих директориях логов
+  debug:
+    msg: |
+      ВНИМАНИЕ: Директория для логов не существует для jail "{{ item.item.name }}":
+      Путь: {{ item.item.logpath | regex_replace('\\*.*$', '') | dirname | default(item.item.logpath) }}
+      fail2ban может не работать корректно. Создайте директорию или проверьте путь.
+  loop: "{{ log_path_stat.results | default([]) }}"
+  when:
+    - fail2ban_enabled
+    - item.stat.exists | default(false) == false
+    - item.item.enabled | default(true)
+  tags:
+    - fail2ban
+    - logs-check
+
+- name: Предупреждение о несуществующих лог-файлах
+  debug:
+    msg: |
+      ВНИМАНИЕ: Лог-файл не существует для jail "{{ item.item.name }}":
+      Путь: {{ item.item.logpath }}
+      fail2ban может не работать корректно. Убедитесь, что сервис создает этот лог-файл.
+  loop: "{{ log_file_stat.results | default([]) }}"
+  when:
+    - fail2ban_enabled
+    - item.stat.exists | default(false) == false
+    - item.item.enabled | default(true)
+  tags:
+    - fail2ban
+    - logs-check
+
+- name: Создание директорий для логов (если не существуют)
+  file:
+    path: "{{ item.logpath | regex_replace('\\*.*$', '') | dirname | default(item.logpath) }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  loop: "{{ fail2ban_jails }}"
+  when:
+    - fail2ban_enabled
+    - item.enabled | default(true)
+    - item.logpath is defined
+    - fail2ban_create_log_dirs | default(false)
+    - ansible_check_mode | default(false) == false
+  failed_when: false
+  tags:
+    - fail2ban
+    - logs-check
+
+- name: Проверка прав доступа к лог-файлам
+  stat:
+    path: "{{ item.logpath }}"
+  register: log_permissions
+  loop: "{{ fail2ban_jails }}"
+  when:
+    - fail2ban_enabled
+    - item.enabled | default(true)
+    - item.logpath is defined
+    - "'*' not in item.logpath"
+  tags:
+    - fail2ban
+    - logs-check
+
+- name: Предупреждение о проблемах с правами доступа
+  debug:
+    msg: |
+      ВНИМАНИЕ: Возможны проблемы с правами доступа к лог-файлу для jail "{{ item.item.name }}":
+      Путь: {{ item.item.logpath }}
+      Права: {{ item.stat.mode | default('неизвестно') }}
+      fail2ban должен иметь доступ на чтение этого файла.
+  loop: "{{ log_permissions.results | default([]) }}"
+  when:
+    - fail2ban_enabled
+    - item.stat.exists | default(false)
+    - item.stat.mode is defined
+    - item.stat.readable | default(true) == false
+  tags:
+    - fail2ban
+    - logs-check

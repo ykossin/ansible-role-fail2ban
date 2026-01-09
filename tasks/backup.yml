@@ -1,0 +1,78 @@
+---
+# Создание бэкапа существующей конфигурации fail2ban
+
+- name: Проверка существования jail.local
+  stat:
+    path: /etc/fail2ban/jail.local
+  register: jail_local_stat
+  when: fail2ban_enabled
+  tags:
+    - fail2ban
+    - backup
+
+- name: Создание директории для бэкапов
+  file:
+    path: /etc/fail2ban/backups
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  when:
+    - fail2ban_enabled
+    - jail_local_stat.stat.exists | default(false)
+  tags:
+    - fail2ban
+    - backup
+
+- name: Создание бэкапа существующей конфигурации jail.local
+  copy:
+    src: /etc/fail2ban/jail.local
+    dest: "/etc/fail2ban/backups/jail.local.backup.{{ ansible_date_time.epoch }}"
+    remote_src: true
+    owner: root
+    group: root
+    mode: '0644'
+  when:
+    - fail2ban_enabled
+    - jail_local_stat.stat.exists | default(false)
+    - ansible_check_mode | default(false) == false
+  register: backup_result
+  failed_when: false
+  changed_when: backup_result.dest is defined
+  tags:
+    - fail2ban
+    - backup
+
+- name: Информация о созданном бэкапе
+  debug:
+    msg: "Создан бэкап конфигурации: {{ backup_result.dest }}"
+  when:
+    - fail2ban_enabled
+    - backup_result.dest is defined
+  tags:
+    - fail2ban
+    - backup
+
+- name: Очистка старых бэкапов (оставить последние 5)
+  find:
+    paths: /etc/fail2ban/backups
+    patterns: "jail.local.backup.*"
+    file_type: file
+  register: old_backups
+  when: fail2ban_enabled
+  tags:
+    - fail2ban
+    - backup
+
+- name: Удаление старых бэкапов
+  file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ (old_backups.files | sort(attribute='mtime') | list)[:-5] | default([]) }}"
+  when:
+    - fail2ban_enabled
+    - old_backups.files | length > 5
+    - ansible_check_mode | default(false) == false
+  tags:
+    - fail2ban
+    - backup

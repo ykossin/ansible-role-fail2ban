@@ -1,0 +1,95 @@
+---
+# Сбор метрик и статистики fail2ban
+
+- name: Сбор статистики fail2ban
+  command: fail2ban-client status
+  register: fail2ban_metrics_status
+  changed_when: false
+  failed_when: false
+  when:
+    - fail2ban_enabled
+    - fail2ban_collect_metrics | default(false)
+    - fail2ban_state == "started"
+  tags:
+    - fail2ban
+    - metrics
+
+- name: Сбор статистики по каждому jail
+  command: fail2ban-client status {{ item.name }}
+  register: jail_metrics
+  loop: "{{ fail2ban_jails }}"
+  when:
+    - fail2ban_enabled
+    - fail2ban_collect_metrics | default(false)
+    - fail2ban_state == "started"
+    - item.enabled | default(true)
+  changed_when: false
+  failed_when: false
+  tags:
+    - fail2ban
+    - metrics
+
+- name: Парсинг статистики fail2ban
+  set_fact:
+    fail2ban_metrics:
+      total_jails: "{{ (fail2ban_metrics_status.stdout | regex_search('Jail list:\\s+(.+)') | default([''])[0] | split(',')) | length }}"
+      active_jails: "{{ fail2ban_jails | selectattr('enabled', 'equalto', true) | list | length }}"
+      status: "{{ fail2ban_metrics_status.stdout_lines[0] | default('unknown') }}"
+  when:
+    - fail2ban_enabled
+    - fail2ban_collect_metrics | default(false)
+    - fail2ban_metrics_status.rc == 0
+  tags:
+    - fail2ban
+    - metrics
+
+- name: Парсинг статистики по jail
+  set_fact:
+    jail_metrics_parsed: "{{ jail_metrics_parsed | default([]) + [{
+      'name': item.item.name,
+      'banned_ips': (item.stdout | regex_search('Banned IP list:\\s+(.+)') | default(['0'])[0] | split('\\s+') | select('match', '.*') | list | length) | default(0),
+      'failed': (item.stdout | regex_search('Currently failed:\\s+(\\d+)') | default(['0'])[0]) | int | default(0),
+      'total_banned': (item.stdout | regex_search('Total banned:\\s+(\\d+)') | default(['0'])[0]) | int | default(0)
+    }] }}"
+  loop: "{{ jail_metrics.results | default([]) }}"
+  when:
+    - fail2ban_enabled
+    - fail2ban_collect_metrics | default(false)
+    - item.rc == 0
+  tags:
+    - fail2ban
+    - metrics
+
+- name: Отображение метрик fail2ban
+  debug:
+    msg:
+      - "=== Метрики fail2ban ==="
+      - "Всего jail: {{ fail2ban_metrics.total_jails | default('N/A') }}"
+      - "Активных jail: {{ fail2ban_metrics.active_jails | default('N/A') }}"
+      - "Статус: {{ fail2ban_metrics.status | default('N/A') }}"
+      - ""
+      - "=== Статистика по jail ==="
+      - "{{ jail_metrics_parsed | default([]) | map(attribute='name') | list | join(', ') }}"
+  when:
+    - fail2ban_enabled
+    - fail2ban_collect_metrics | default(false)
+    - fail2ban_metrics is defined
+  tags:
+    - fail2ban
+    - metrics
+
+- name: Отображение детальной статистики по jail
+  debug:
+    msg:
+      - "Jail: {{ item.name }}"
+      - "  Забаненных IP: {{ item.banned_ips | default(0) }}"
+      - "  Текущих неудачных попыток: {{ item.failed | default(0) }}"
+      - "  Всего забанено: {{ item.total_banned | default(0) }}"
+  loop: "{{ jail_metrics_parsed | default([]) }}"
+  when:
+    - fail2ban_enabled
+    - fail2ban_collect_metrics | default(false)
+    - jail_metrics_parsed is defined
+  tags:
+    - fail2ban
+    - metrics

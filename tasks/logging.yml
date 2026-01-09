@@ -1,0 +1,86 @@
+---
+# Логирование действий роли fail2ban
+
+- name: Создание директории для логов действий (если нужно)
+  file:
+    path: "{{ fail2ban_actions_log_path | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  when:
+    - fail2ban_enabled
+    - fail2ban_log_actions | default(false)
+    - ansible_check_mode | default(false) == false
+  tags:
+    - fail2ban
+    - logging
+
+- name: Логирование начала настройки fail2ban
+  lineinfile:
+    path: "{{ fail2ban_actions_log_path }}"
+    line: "{{ ansible_date_time.iso8601 }} - [INFO] Начало настройки fail2ban (роль: fail2ban)"
+    create: yes
+    mode: '0644'
+  when:
+    - fail2ban_enabled
+    - fail2ban_log_actions | default(false)
+  tags:
+    - fail2ban
+    - logging
+
+- name: Логирование установки fail2ban
+  lineinfile:
+    path: "{{ fail2ban_actions_log_path }}"
+    line: "{{ ansible_date_time.iso8601 }} - [INFO] fail2ban установлен: {{ fail2ban_install_result.changed | default(false) }}"
+    create: yes
+    mode: '0644'
+  when:
+    - fail2ban_enabled
+    - fail2ban_log_actions | default(false)
+    - fail2ban_install_result is defined
+  tags:
+    - fail2ban
+    - logging
+
+- name: Логирование создания конфигурации
+  lineinfile:
+    path: "{{ fail2ban_actions_log_path }}"
+    line: "{{ ansible_date_time.iso8601 }} - [INFO] Конфигурация fail2ban создана/обновлена"
+    create: yes
+    mode: '0644'
+  when:
+    - fail2ban_enabled
+    - fail2ban_log_actions | default(false)
+  tags:
+    - fail2ban
+    - logging
+
+- name: Логирование состояния сервиса
+  lineinfile:
+    path: "{{ fail2ban_actions_log_path }}"
+    line: "{{ ansible_date_time.iso8601 }} - [INFO] fail2ban сервис: {{ fail2ban_state }}"
+    create: yes
+    mode: '0644'
+  when:
+    - fail2ban_enabled
+    - fail2ban_log_actions | default(false)
+    - fail2ban_service is defined
+  tags:
+    - fail2ban
+    - logging
+
+- name: Логирование ошибок
+  lineinfile:
+    path: "{{ fail2ban_actions_log_path }}"
+    line: "{{ ansible_date_time.iso8601 }} - [ERROR] {{ item }}"
+    create: yes
+    mode: '0644'
+  when:
+    - fail2ban_enabled
+    - fail2ban_log_actions | default(false)
+    - fail2ban_errors is defined
+  loop: "{{ fail2ban_errors }}"
+  tags:
+    - fail2ban
+    - logging

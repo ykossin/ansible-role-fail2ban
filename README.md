@@ -5,11 +5,18 @@
 ## Описание
 
 Эта роль устанавливает и настраивает fail2ban для защиты серверов от атак брутфорса:
-- Установка fail2ban
+- Установка fail2ban с обработкой ошибок
+- Валидация всех переменных перед применением
+- Автоматический бэкап существующей конфигурации
+- Проверка зависимостей (ufw, iptables)
+- Проверка синтаксиса конфигурации перед перезапуском
 - Настройка jail для различных сервисов (SSH, HTTP, etc.)
 - Настройка белого списка IP адресов
 - Настройка email уведомлений (опционально)
 - Создание пользовательских фильтров и действий
+- Поддержка systemd backend
+- Поддержка rate limiting
+- Поддержка IPv6
 
 ## Требования
 
@@ -33,6 +40,11 @@ fail2ban_config:
   bantime: 3600    # Время бана (секунды)
   findtime: 600    # Окно времени (секунды)
   maxretry: 5      # Количество попыток до бана
+  backend: "auto"  # Backend: auto, systemd, pyinotify
+  banaction: "ufw" # Действие: ufw, iptables, iptables-multiport, etc.
+  chain: "INPUT"   # Цепочка iptables (если используется)
+  rate_limit: 10   # Rate limiting (опционально)
+  ipv6_enabled: true # Поддержка IPv6
 
 # Включенные jail
 fail2ban_jails:
@@ -105,15 +117,59 @@ fail2ban_whitelist_ips:
     - fail2ban
 ```
 
+### С логированием действий и метриками
+
+```yaml
+- hosts: all
+  become: true
+  vars:
+    fail2ban_log_actions: true
+    fail2ban_collect_metrics: true
+    fail2ban_create_log_dirs: true
+  roles:
+    - fail2ban
+```
+
+### С дополнительными jail
+
+```yaml
+- hosts: all
+  become: true
+  vars:
+    fail2ban_jails:
+      - name: "sshd"
+        enabled: true
+        port: "ssh"
+        filter: "sshd"
+        logpath: "/var/log/auth.log"
+      - name: "nginx-http-auth"
+        enabled: true
+        port: "http,https"
+        filter: "nginx-http-auth"
+        logpath: "/var/log/nginx/error.log"
+        maxretry: 3
+  roles:
+    - fail2ban
+```
+
 ## Теги
 
 - `fail2ban` - все задачи fail2ban
+- `validation` - валидация переменных
 - `packages` - установка пакетов
+- `dependencies` - проверка зависимостей
+- `backup` - создание бэкапа конфигурации
+- `logs-check` - проверка лог-файлов
 - `config` - настройка конфигурации
 - `filters` - создание фильтров
 - `actions` - создание действий
 - `service` - управление сервисом
-- `check` - проверка статуса
+- `check` - проверка статуса и синтаксиса
+- `logging` - логирование действий роли
+- `metrics` - сбор метрик и статистики
+- `monitoring` - настройка мониторинга
+- `prometheus` - настройка Prometheus экспорта
+- `reports` - настройка отчетов
 
 ## Примеры использования тегов
 
@@ -150,6 +206,109 @@ fail2ban-client set sshd banip 1.2.3.4
 tail -f /var/log/fail2ban.log
 ```
 
+## Мониторинг
+
+### Простые скрипты
+
+Роль устанавливает несколько полезных скриптов:
+
+```bash
+# Интерактивный мониторинг (рекомендуется)
+/usr/local/bin/fail2ban-monitor.sh
+# Показывает меню с возможностью:
+# - Просмотра статуса всех jail
+# - Просмотра забаненных IP
+# - Разбана IP
+# - Бана IP вручную
+
+# Быстрая проверка статуса
+/usr/local/bin/fail2ban-status.sh
+/usr/local/bin/fail2ban-status.sh sshd  # для конкретного jail
+
+# Генерация отчета
+/usr/local/bin/fail2ban-report.sh
+/usr/local/bin/fail2ban-report.sh admin@example.com  # с отправкой на email
+
+# Экспорт метрик для Prometheus
+/usr/local/bin/fail2ban-prometheus.sh
+```
+
+### Prometheus мониторинг
+
+Для включения экспорта метрик в Prometheus:
+
+```yaml
+fail2ban_prometheus_enabled: true
+fail2ban_prometheus_metrics_dir: "/var/lib/prometheus/node-exporter"
+```
+
+Метрики будут обновляться каждую минуту через cron и доступны через node_exporter textfile collector.
+
+**Доступные метрики:**
+- `fail2ban_jail_active` - активность jail (0/1)
+- `fail2ban_jail_banned_current` - текущее количество забаненных IP
+- `fail2ban_jail_banned_total` - всего забанено (counter)
+- `fail2ban_jail_failed_current` - текущие неудачные попытки
+- `fail2ban_jail_failed_total` - всего неудачных попыток (counter)
+
+### Ежедневные отчеты
+
+Для включения ежедневных отчетов:
+
+```yaml
+fail2ban_report_enabled: true
+fail2ban_report_email: "admin@example.com"  # опционально
+```
+
+Отчеты будут отправляться каждый день в 8:00 утра.
+
+### Email уведомления
+
+Для мгновенных уведомлений при бане:
+
+```yaml
+fail2ban_config:
+  destemail: "admin@example.com"
+fail2ban_send_email: true
+```
+
+### Логирование
+
+Все события fail2ban логируются в:
+- `/var/log/fail2ban.log` - основной лог
+- `journalctl -u fail2ban` - systemd журнал
+
+## Новые возможности (обновление январь 2026)
+
+### Улучшения безопасности и надежности:
+- ✅ **Валидация переменных** - проверка всех входных данных перед применением
+- ✅ **Автоматический бэкап** - создание резервных копий конфигурации перед изменениями
+- ✅ **Проверка синтаксиса** - валидация конфигурации перед перезапуском сервиса
+- ✅ **Проверка зависимостей** - автоматическая проверка наличия ufw/iptables
+- ✅ **Обработка ошибок** - детальные сообщения об ошибках при установке
+- ✅ **Проверка лог-файлов** - валидация существования и прав доступа к логам
+- ✅ **Логирование действий** - запись действий роли в отдельный лог-файл
+- ✅ **Метрики и статистика** - сбор и отображение статистики работы fail2ban
+- ✅ **Molecule тесты** - автоматическое тестирование роли на разных дистрибутивах
+
+### Новые настройки:
+- ✅ **Backend настройка** - поддержка systemd, pyinotify, auto
+- ✅ **Rate limiting** - ограничение частоты действий
+- ✅ **IPv6 поддержка** - настройка поддержки IPv6
+- ✅ **Chain для iptables** - настройка цепочки iptables
+
+### Модульная структура:
+Роль разделена на логические модули для лучшей организации:
+- `validation.yml` - валидация переменных
+- `installation.yml` - установка и проверка зависимостей
+- `backup.yml` - создание бэкапов
+- `logs-check.yml` - проверка лог-файлов
+- `config.yml` - настройка конфигурации
+- `service.yml` - управление сервисом
+- `check.yml` - проверка статуса и синтаксиса
+- `logging.yml` - логирование действий роли
+- `metrics.yml` - сбор метрик и статистики
+
 ## Troubleshooting
 
 ### Проблема: IP забанен, но нужно разбанить
@@ -168,6 +327,23 @@ fail2ban-client set sshd unbanip IP_ADDRESS
 2. Проверьте логи сервиса: `tail -f /var/log/auth.log`
 3. Проверьте фильтр: `fail2ban-regex /var/log/auth.log /etc/fail2ban/filter.d/sshd.conf`
 4. Убедитесь, что firewall работает: `ufw status`
+5. Проверьте синтаксис конфигурации: `fail2ban-client -t`
+6. Проверьте наличие зависимостей (ufw/iptables): `which ufw` или `which iptables`
+
+### Проблема: Ошибка валидации переменных
+
+Роль автоматически проверяет все переменные. Если возникает ошибка:
+1. Проверьте значения в `defaults/main.yml` или в вашем playbook
+2. Убедитесь, что все числовые значения > 0
+3. Проверьте, что loglevel соответствует допустимым значениям
+4. Проверьте, что banaction поддерживается
+
+### Проблема: Конфигурация не применяется
+
+1. Проверьте бэкапы в `/etc/fail2ban/backups/`
+2. Проверьте синтаксис: `fail2ban-client -t`
+3. Проверьте права доступа к файлам конфигурации
+4. Проверьте логи fail2ban: `journalctl -u fail2ban -f`
 
 ### Проблема: Слишком много ложных срабатываний
 
