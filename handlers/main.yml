@@ -1,0 +1,8 @@
+---
+# Обработчики событий для роли fail2ban
+
+- name: restart fail2ban
+  systemd:
+    name: fail2ban
+    state: restarted
+    enabled: "{{ fail2ban_enabled_on_boot }}"

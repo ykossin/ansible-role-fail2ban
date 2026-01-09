@@ -1,0 +1,102 @@
+---
+# Переменные по умолчанию для роли fail2ban
+# Обновлено: январь 2026
+
+# Включить установку и настройку fail2ban
+fail2ban_enabled: true
+
+# Состояние fail2ban (started/stopped)
+fail2ban_state: started
+
+# Включить fail2ban при загрузке
+fail2ban_enabled_on_boot: true
+
+# Настройки по умолчанию для jail.local
+fail2ban_config:
+  # Логи и действия
+  logtarget: "/var/log/fail2ban.log"
+  loglevel: "INFO"
+  syslogsocket: "auto"
+  
+  # Настройки бана
+  bantime: 3600  # Время бана в секундах (1 час)
+  findtime: 600  # Окно времени для поиска неудачных попыток (10 минут)
+  maxretry: 5    # Количество неудачных попыток до бана
+  
+  # Настройки действия
+  banaction: "ufw"
+  action: "action_"
+  
+  # Email уведомления (опционально)
+  destemail: ""
+  sendername: "Fail2Ban"
+  sender: "fail2ban@localhost"
+  mta: "sendmail"
+  
+  # Настройки SSH
+  ssh_port: "22"
+  ssh_protocol: "tcp"
+
+# Включенные jail (сервисы для защиты)
+fail2ban_jails:
+  - name: "sshd"
+    enabled: true
+    port: "ssh"
+    filter: "sshd"
+    logpath: "/var/log/auth.log"
+    maxretry: 5
+    bantime: 3600
+    findtime: 600
+  # Примеры для других сервисов:
+  # - name: "nginx-http-auth"
+  #   enabled: true
+  #   port: "http,https"
+  #   filter: "nginx-http-auth"
+  #   logpath: "/var/log/nginx/error.log"
+  #   maxretry: 3
+  # - name: "apache-auth"
+  #   enabled: true
+  #   port: "http,https"
+  #   filter: "apache-auth"
+  #   logpath: "/var/log/apache2/*error.log"
+
+# Белый список IP адресов (никогда не банить)
+fail2ban_whitelist_ips: []
+  # Примеры:
+  # - "127.0.0.1/8"
+  # - "::1"
+  # - "10.0.0.0/8"
+  # - "192.168.0.0/16"
+
+# IP адреса для игнорирования (игнорировать попытки)
+fail2ban_ignore_ips: []
+  # Примеры:
+  # - "127.0.0.1/8"
+  # - "::1"
+
+# Пользовательские фильтры
+fail2ban_filters: []
+  # Примеры:
+  # - name: "custom-ssh"
+  #   content: |
+  #     [Definition]
+  #     failregex = ^.*Failed password.*from <HOST>
+  #     ignoreregex =
+
+# Пользовательские действия
+fail2ban_actions: []
+  # Примеры:
+  # - name: "custom-action"
+  #   content: |
+  #     [Definition]
+  #     actionstart = ...
+  #     actionstop = ...
+  #     actioncheck = ...
+  #     actionban = ...
+  #     actionunban = ...
+
+# Отправить email при бане (требует настройки email)
+fail2ban_send_email: false
+
+# Отправить email только при ошибках
+fail2ban_email_only_errors: false

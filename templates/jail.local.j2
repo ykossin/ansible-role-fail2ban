@@ -1,0 +1,64 @@
+# Конфигурация fail2ban
+# Сгенерировано Ansible ролью fail2ban
+# Обновлено: январь 2026
+
+[DEFAULT]
+
+# Логи
+loglevel = {{ fail2ban_config.loglevel }}
+logtarget = {{ fail2ban_config.logtarget }}
+syslogsocket = {{ fail2ban_config.syslogsocket }}
+
+# Настройки бана
+bantime = {{ fail2ban_config.bantime }}
+findtime = {{ fail2ban_config.findtime }}
+maxretry = {{ fail2ban_config.maxretry }}
+
+# Действие по умолчанию
+banaction = {{ fail2ban_config.banaction }}
+action = {{ fail2ban_config.action }}
+
+{% if fail2ban_config.destemail | length > 0 %}
+# Email уведомления
+destemail = {{ fail2ban_config.destemail }}
+sendername = {{ fail2ban_config.sendername }}
+sender = {{ fail2ban_config.sender }}
+mta = {{ fail2ban_config.mta }}
+{% endif %}
+
+# Игнорировать IP адреса
+ignoreip = {{ (fail2ban_whitelist_ips + fail2ban_ignore_ips) | join(' ') }}
+
+{% if fail2ban_config.destemail | length > 0 and fail2ban_send_email %}
+# Действие с email
+action_mw = %(banaction)s[name=%(__name__)s, bantime="%(bantime)s", port="%(port)s", protocol="%(protocol)s"]
+               %(mta)s-whois[name=%(__name__)s, sender="%(sender)s", dest="%(destemail)s", protocol="%(protocol)s", chain="%(chain)s"]
+{% if fail2ban_email_only_errors %}
+action_mwl = %(banaction)s[name=%(__name__)s, bantime="%(bantime)s", port="%(port)s", protocol="%(protocol)s"]
+                %(mta)s-whois-lines[name=%(__name__)s, sender="%(sender)s", dest="%(destemail)s", logpath="%(logpath)s", chain="%(chain)s"]
+{% endif %}
+{% endif %}
+
+{% for jail in fail2ban_jails %}
+{% if jail.enabled | default(true) %}
+# Jail: {{ jail.name }}
+[{{ jail.name }}]
+enabled = true
+port = {{ jail.port | default(jail.filter | default('ssh')) }}
+filter = {{ jail.filter | default(jail.name) }}
+logpath = {{ jail.logpath }}
+maxretry = {{ jail.maxretry | default(fail2ban_config.maxretry) }}
+bantime = {{ jail.bantime | default(fail2ban_config.bantime) }}
+findtime = {{ jail.findtime | default(fail2ban_config.findtime) }}
+{% if jail.protocol is defined %}
+protocol = {{ jail.protocol }}
+{% endif %}
+{% if jail.banaction is defined %}
+banaction = {{ jail.banaction }}
+{% endif %}
+{% if jail.action is defined %}
+action = {{ jail.action }}
+{% endif %}
+
+{% endif %}
+{% endfor %}

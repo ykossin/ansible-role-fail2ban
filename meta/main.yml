@@ -1,0 +1,27 @@
+---
+galaxy_info:
+  author: y.kossin
+  role_name: fail2ban
+  namespace: ykossin
+  description: Установка и настройка fail2ban для защиты от брутфорса
+  license: ISC
+  min_ansible_version: "2.9"
+  platforms:
+    - name: Debian
+      versions:
+        - bookworm
+        - bullseye
+        - trixie
+    - name: Ubuntu
+      versions:
+        - focal
+        - jammy
+        - noble
+  galaxy_tags:
+    - fail2ban
+    - security
+    - bruteforce
+    - debian
+    - ubuntu
+
+dependencies: []
